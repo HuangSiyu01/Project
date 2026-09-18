@@ -1,0 +1,87 @@
+﻿@model List<Post>
+
+@{
+    ViewData["Title"] = "Home";
+    var keyword = ViewBag.Keyword as string;
+    var hasKeyword = !string.IsNullOrWhiteSpace(keyword);
+}
+
+<div class="container mt-4">
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="fw-bold mb-0">
+            <i class="bi bi-compass text-primary"></i> Travel Stories
+        </h2>
+    </div>
+
+    <form method="get" asp-controller="Post" asp-action="Index" class="mb-4">
+        <div class="input-group input-group-lg shadow-sm">
+            <span class="input-group-text bg-white border-end-0">
+                <i class="bi bi-search"></i>
+            </span>
+            <input type="text"
+                   name="keyword"
+                   value="@keyword"
+                   class="form-control border-start-0"
+                   placeholder="Search by location..." />
+            <button type="submit" class="btn btn-primary px-4">
+                <i class="bi bi-search"></i> Search
+            </button>
+        </div>
+    </form>
+
+    @if (!hasKeyword)
+    {
+        <div class="alert alert-light border text-center py-5">
+            <i class="bi bi-geo-alt fs-1 text-muted d-block mb-2"></i>
+            <p class="text-muted mb-0">Type a location above to start exploring.</p>
+        </div>
+    }
+    else if (Model == null || Model.Count == 0)
+    {
+        <div class="alert alert-info text-center py-4">
+            <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+            <p class="mb-0">No results for "<strong>@keyword</strong>".</p>
+        </div>
+    }
+    else
+    {
+        <p class="text-muted">
+            <i class="bi bi-funnel"></i> Results for "<strong>@keyword</strong>":
+        </p>
+
+        <div class="row g-4">
+            @foreach (var post in Model)
+            {
+                var firstImage = post.Images?.FirstOrDefault();
+
+                <div class="col-6 col-md-4 col-lg-3">
+                    <a asp-action="Details" asp-route-id="@post.Id" class="text-decoration-none text-dark">
+                        <div class="card h-100 shadow-sm border-0 rounded-3 overflow-hidden">
+                            @if (firstImage != null)
+                            {
+                                <img src="@firstImage.ImageUrl"
+                                     class="card-img-top"
+                                     style="height:180px;object-fit:cover;" />
+                            }
+                            else
+                            {
+                                <div class="bg-light d-flex align-items-center justify-content-center"
+                                     style="height:180px;">
+                                    <i class="bi bi-image text-muted fs-1"></i>
+                                </div>
+                            }
+
+                            <div class="card-body">
+                                <h6 class="card-title fw-semibold mb-1">@post.Title</h6>
+                                <p class="text-muted small mb-0">
+                                    <i class="bi bi-geo-alt-fill text-danger"></i> @post.Location
+                                </p>
+                            </div>
+                        </div>
+                    </a>
+                </div>
+            }
+        </div>
+    }
+</div>

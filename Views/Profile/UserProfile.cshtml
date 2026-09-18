@@ -1,0 +1,65 @@
+﻿@model Project.ViewModels.UserProfileViewModel
+
+@{
+    ViewData["Title"] = Model.DisplayName;
+}
+
+<div class="container mt-4">
+
+    <h2>@Model.DisplayName</h2>
+
+    <p class="text-muted">
+        <strong>Followers:</strong> @Model.FollowerCount &nbsp;|&nbsp;
+        <strong>Following:</strong> @Model.FollowingCount
+    </p>
+
+    @if (!Model.IsCurrentUser)
+    {
+        <form asp-controller="Interaction" asp-action="ToggleFollow" method="post" class="d-inline">
+            <input type="hidden" name="followeeId" value="@Model.UserId" />
+            <input type="hidden" name="returnUrl" value="@Context.Request.Path" />
+            <button type="submit" class="btn @(Model.IsFollowing ? "btn-outline-secondary" : "btn-primary")">
+                @(Model.IsFollowing ? "Unfollow" : "Follow")
+            </button>
+        </form>
+    }
+
+    <hr class="mt-4" />
+
+    <h4>Posts</h4>
+
+    @if (!Model.Posts.Any())
+    {
+        <p class="text-muted">No posts yet.</p>
+    }
+    else
+    {
+        <div class="row g-3">
+            @foreach (var post in Model.Posts)
+            {
+                var firstImage = post.Images?.FirstOrDefault();
+                <div class="col-6 col-md-4 col-lg-3">
+                    <a asp-controller="Post" asp-action="Details" asp-route-id="@post.Id"
+                       class="text-decoration-none text-dark">
+                        <div class="card h-100 shadow-sm border-0">
+                            @if (firstImage != null)
+                            {
+                                <img src="@firstImage.ImageUrl" class="card-img-top" style="height:180px;object-fit:cover;" />
+                            }
+                            else
+                            {
+                                <div class="bg-light d-flex align-items-center justify-content-center" style="height:180px;">
+                                    <span class="text-muted">No image</span>
+                                </div>
+                            }
+                            <div class="card-body p-2">
+                                <h6 class="card-title mb-1">@post.Title</h6>
+                                <p class="text-muted small mb-0">@post.Location</p>
+                            </div>
+                        </div>
+                    </a>
+                </div>
+            }
+        </div>
+    }
+</div>

@@ -1,0 +1,63 @@
+﻿@{
+    ViewData["Title"] = "Add Images";
+    int postId = ViewBag.PostId;
+}
+
+<div class="container mt-4">
+    <h2>Add Images (max 18)</h2>
+
+    <form asp-action="Create" method="post" enctype="multipart/form-data">
+        <input type="hidden" name="postId" value="@postId" />
+        <div asp-validation-summary="All" class="text-danger"></div>
+
+        <div class="mb-3">
+            <label class="form-label">Select Images</label>
+            <input type="file"
+                   name="images"
+                   id="imageInput"
+                   multiple
+                   accept="image/*"
+                   class="form-control" />
+            <div id="imagePreview" class="row g-2 mt-2"></div>
+        </div>
+
+        <button type="submit" class="btn btn-primary">Upload</button>
+        <a asp-action="Index" asp-route-postId="@postId" class="btn btn-secondary">Back</a>
+    </form>
+</div>
+
+@section Scripts {
+    <script>
+        (function () {
+            var input = document.getElementById('imageInput');
+            var preview = document.getElementById('imagePreview');
+            if (!input || !preview) return;
+
+            input.addEventListener('change', function (e) {
+                preview.innerHTML = '';
+                var files = e.target.files;
+
+                if (files.length > 18) {
+                    alert('You can select at most 18 images.');
+                    input.value = '';
+                    return;
+                }
+
+                for (var i = 0; i < files.length; i++) {
+                    var file = files[i];
+                    if (!file.type.startsWith('image/')) continue;
+
+                    var reader = new FileReader();
+                    reader.onload = function (ev) {
+                        var col = document.createElement('div');
+                        col.className = 'col-4 col-md-2';
+                        col.innerHTML = '<img src="' + ev.target.result +
+                            '" class="img-fluid rounded border" style="height:100px;object-fit:cover;width:100%;" />';
+                        preview.appendChild(col);
+                    };
+                    reader.readAsDataURL(file);
+                }
+            });
+        })();
+    </script>
+}

@@ -1,0 +1,263 @@
+﻿@model Post
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.EntityFrameworkCore
+@using Project.Repositories
+@inject UserManager<ApplicationUser> UserManager
+@inject IUnitOfWork UnitOfWork
+
+@{
+    ViewData["Title"] = Model.Title;
+    var currentUserId = UserManager.GetUserId(User);
+    var isOwner = currentUserId == Model.UserId;
+
+    var hasLiked = currentUserId != null &&
+        await UnitOfWork.Likes.Query().AnyAsync(l => l.PostId == Model.Id && l.UserId == currentUserId);
+
+    var hasFavorited = currentUserId != null &&
+        await UnitOfWork.Favorites.Query().AnyAsync(f => f.PostId == Model.Id && f.UserId == currentUserId);
+
+    var isFollowing = currentUserId != null && currentUserId != Model.UserId &&
+        await UnitOfWork.Follows.Query().AnyAsync(f => f.FollowerId == currentUserId && f.FolloweeId == Model.UserId);
+
+    var likeCount = await UnitOfWork.Likes.Query().CountAsync(l => l.PostId == Model.Id);
+    var favoriteCount = await UnitOfWork.Favorites.Query().CountAsync(f => f.PostId == Model.Id);
+}
+
+<div class="container mt-4">
+
+    <div class="card shadow-sm border-0 rounded-3 mb-4">
+        <div class="card-body">
+
+            <h2 class="fw-bold">@Model.Title</h2>
+
+            <p class="text-muted mb-3">
+                <i class="bi bi-geo-alt-fill text-danger"></i>
+                <strong>@Model.Location</strong>
+                &nbsp;|&nbsp;
+                <span class="badge bg-warning text-dark">
+                    <i class="bi bi-star-fill"></i> @Model.Rating / 10
+                </span>
+                &nbsp;|&nbsp;
+                <i class="bi bi-person-circle"></i>
+                <a asp-controller="Profile" asp-action="UserProfile" asp-route-id="@Model.UserId"
+                   class="text-decoration-none">
+                    @Model.User?.DisplayName
+                </a>
+                &nbsp;|&nbsp;
+                <i class="bi bi-clock"></i> @Model.CreatedAt.ToString("g")
+            </p>
+
+            @if (!isOwner && currentUserId != null)
+            {
+                <form asp-controller="Interaction" asp-action="ToggleFollow" method="post" class="d-inline">
+                    <input type="hidden" name="followeeId" value="@Model.UserId" />
+                    <input type="hidden" name="returnUrl" value="@Context.Request.Path" />
+                    <button type="submit" class="btn btn-sm @(isFollowing ? "btn-outline-secondary" : "btn-primary")">
+                        <i class="bi @(isFollowing ? "bi-person-dash" : "bi-person-plus")"></i>
+                        @(isFollowing ? "Unfollow" : "Follow")
+                    </button>
+                </form>
+            }
+
+            <h5 class="mt-4"><i class="bi bi-journal-text"></i> Review</h5>
+            <p style="white-space: pre-line;">@Model.Review</p>
+
+            @if (Model.Images != null && Model.Images.Any())
+            {
+                <div class="row g-2 mt-3">
+                    @foreach (var img in Model.Images)
+                    {
+                        <div class="col-6 col-md-4">
+                            <img src="@img.ImageUrl"
+                                 class="img-fluid rounded-3 shadow-sm"
+                                 style="cursor:pointer;height:200px;object-fit:cover;width:100%;"
+                                 data-bs-toggle="modal"
+                                 data-bs-target="#imageModal"
+                                 data-image-src="@img.ImageUrl" />
+                        </div>
+                    }
+                </div>
+            }
+
+            <div class="mt-3">
+                <form asp-controller="Interaction" asp-action="ToggleLike" method="post" class="d-inline">
+                    <input type="hidden" name="postId" value="@Model.Id" />
+                    <input type="hidden" name="returnUrl" value="@Context.Request.Path" />
+                    <button type="submit" class="btn btn-sm @(hasLiked ? "btn-danger" : "btn-outline-danger")">
+                        <i class="bi @(hasLiked ? "bi-heart-fill" : "bi-heart")"></i>
+                        @(hasLiked ? "Liked" : "Like") (@likeCount)
+                    </button>
+                </form>
+
+                <form asp-controller="Interaction" asp-action="ToggleFavorite" method="post" class="d-inline">
+                    <input type="hidden" name="postId" value="@Model.Id" />
+                    <input type="hidden" name="returnUrl" value="@Context.Request.Path" />
+                    <button type="submit" class="btn btn-sm @(hasFavorited ? "btn-warning" : "btn-outline-warning")">
+                        <i class="bi @(hasFavorited ? "bi-bookmark-fill" : "bi-bookmark")"></i>
+                        @(hasFavorited ? "Favorited" : "Favorite") (@favoriteCount)
+                    </button>
+                </form>
+            </div>
+
+            @if (isOwner)
+            {
+                <div class="mt-3">
+                    <a asp-action="Edit" asp-route-id="@Model.Id" class="btn btn-warning btn-sm">
+                        <i class="bi bi-pencil"></i> Edit
+                    </a>
+                    <a asp-action="Delete" asp-route-id="@Model.Id" class="btn btn-danger btn-sm">
+                        <i class="bi bi-trash"></i> Delete
+                    </a>
+                    <a asp-controller="PostImage" asp-action="Index" asp-route-postId="@Model.Id"
+                       class="btn btn-info btn-sm">
+                        <i class="bi bi-images"></i> Manage Images
+                    </a>
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- Image Modal -->
+    <div class="modal fade" id="imageModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content bg-dark">
+                <button type="button" class="btn-close btn-close-white position-absolute top-0 end-0 m-3"
+                        data-bs-dismiss="modal" aria-label="Close"></button>
+                <div class="modal-body text-center p-0">
+                    <img id="modalImage" src="" class="img-fluid" />
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <h4 class="mt-4 mb-3">
+        <i class="bi bi-chat-dots"></i> Comments
+    </h4>
+
+    @if (User.Identity != null && User.Identity.IsAuthenticated)
+    {
+        <form asp-controller="Comment" asp-action="Create" method="post" class="mb-4">
+            <input type="hidden" name="postId" value="@Model.Id" />
+            <div class="input-group shadow-sm">
+                <input type="text" name="content" class="form-control"
+                       placeholder="Write a comment..." required maxlength="500" />
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-send"></i> Post
+                </button>
+            </div>
+        </form>
+    }
+
+    @if (Model.Comments != null && Model.Comments.Any(c => c.ParentCommentId == null))
+    {
+        var topLevel = Model.Comments.Where(c => c.ParentCommentId == null).OrderBy(c => c.CreatedAt);
+
+        <ul class="list-group shadow-sm">
+            @foreach (var c in topLevel)
+            {
+                <li class="list-group-item">
+                    <div class="d-flex justify-content-between">
+                        <strong><i class="bi bi-person-circle"></i> @c.User?.DisplayName</strong>
+                        <small class="text-muted">@c.CreatedAt.ToString("g")</small>
+                    </div>
+                    <p class="mb-1">@c.Content</p>
+
+                    @if (currentUserId == c.UserId)
+                    {
+                        <form asp-controller="Comment" asp-action="Delete" method="post" class="d-inline">
+                            <input type="hidden" name="id" value="@c.Id" />
+                            <input type="hidden" name="postId" value="@Model.Id" />
+                            <button type="submit" class="btn btn-sm btn-link text-danger p-0">
+                                <i class="bi bi-trash"></i> Delete
+                            </button>
+                        </form>
+                    }
+
+                    @if (User.Identity != null && User.Identity.IsAuthenticated)
+                    {
+                        <button type="button" class="btn btn-sm btn-link p-0 ms-2 toggle-reply"
+                                data-target="reply-@c.Id">
+                            <i class="bi bi-reply"></i> Reply
+                        </button>
+
+                        <div id="reply-@c.Id" class="mt-2 d-none">
+                            <form asp-controller="Comment" asp-action="Create" method="post">
+                                <input type="hidden" name="postId" value="@Model.Id" />
+                                <input type="hidden" name="parentCommentId" value="@c.Id" />
+                                <div class="input-group">
+                                    <input type="text" name="content" class="form-control"
+                                           placeholder="Write a reply..." required maxlength="500" />
+                                    <button type="submit" class="btn btn-primary">Reply</button>
+                                </div>
+                            </form>
+                        </div>
+                    }
+
+                    @if (c.Replies != null && c.Replies.Any())
+                    {
+                        <ul class="list-group mt-2 ms-4">
+                            @foreach (var r in c.Replies.OrderBy(r => r.CreatedAt))
+                            {
+                                <li class="list-group-item">
+                                    <div class="d-flex justify-content-between">
+                                        <strong><i class="bi bi-person-circle"></i> @r.User?.DisplayName</strong>
+                                        <small class="text-muted">@r.CreatedAt.ToString("g")</small>
+                                    </div>
+                                    <p class="mb-1">@r.Content</p>
+
+                                    @if (currentUserId == r.UserId)
+                                    {
+                                        <form asp-controller="Comment" asp-action="Delete" method="post" class="d-inline">
+                                            <input type="hidden" name="id" value="@r.Id" />
+                                            <input type="hidden" name="postId" value="@Model.Id" />
+                                            <button type="submit" class="btn btn-sm btn-link text-danger p-0">
+                                                <i class="bi bi-trash"></i> Delete
+                                            </button>
+                                        </form>
+                                    }
+                                </li>
+                            }
+                        </ul>
+                    }
+                </li>
+            }
+        </ul>
+    }
+    else
+    {
+        <div class="alert alert-light border text-center">
+            <i class="bi bi-chat-square-text fs-3 text-muted d-block mb-2"></i>
+            No comments yet. Be the first!
+        </div>
+    }
+
+    <a asp-action="Index" class="btn btn-secondary mt-3">
+        <i class="bi bi-arrow-left"></i> Back
+    </a>
+</div>
+
+@section Scripts {
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            var modal = document.getElementById('imageModal');
+            if (modal) {
+                modal.addEventListener('show.bs.modal', function (event) {
+                    var trigger = event.relatedTarget;
+                    var src = trigger.getAttribute('data-image-src');
+                    var img = modal.querySelector('#modalImage');
+                    img.src = src;
+                });
+            }
+
+            document.querySelectorAll('.toggle-reply').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    var targetId = this.getAttribute('data-target');
+                    var targetDiv = document.getElementById(targetId);
+                    if (targetDiv) {
+                        targetDiv.classList.toggle('d-none');
+                    }
+                });
+            });
+        });
+    </script>
+}

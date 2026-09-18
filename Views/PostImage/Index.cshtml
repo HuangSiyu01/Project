@@ -1,0 +1,42 @@
+﻿@model List<PostImage>
+
+@{
+    ViewData["Title"] = "Manage Images";
+    int postId = ViewBag.PostId;
+    string postTitle = ViewBag.PostTitle;
+}
+
+<div class="container mt-4">
+
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2>Images for "@postTitle"</h2>
+        <a asp-action="Create" asp-route-postId="@postId" class="btn btn-primary">
+            + Add Image
+        </a>
+    </div>
+
+    @if (!Model.Any())
+    {
+        <p class="text-muted">No images for this post yet.</p>
+    }
+    else
+    {
+        <div class="row g-3">
+            @foreach (var img in Model)
+            {
+                <div class="col-6 col-md-4 col-lg-3">
+                    <div class="card shadow-sm border-0">
+                        <img src="@img.ImageUrl" class="card-img-top" style="height:180px;object-fit:cover;" />
+                        <div class="card-body p-2 d-flex justify-content-between">
+                            <a asp-action="Edit" asp-route-id="@img.Id" class="btn btn-sm btn-warning">Edit</a>
+                            <a asp-action="Delete" asp-route-id="@img.Id" class="btn btn-sm btn-danger">Delete</a>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+
+    <a asp-controller="Post" asp-action="Details" asp-route-id="@postId"
+       class="btn btn-secondary mt-3">Back to Post</a>
+</div>
