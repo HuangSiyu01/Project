@@ -1,0 +1,16 @@
+﻿using Microsoft.AspNetCore.Mvc;
+using Stripe;
+using System;
+
+@model int
+
+<li class="nav-item">
+    < a class= "nav-link text-dark"
+    asp - area = "Customer"
+    asp - controller = "Cart"
+    asp - action = "Index"
+    aria - label = "Shopping Cart, @Model items" >
+    < i class= "bi bi-cart3" ></ i > Shopping Cart
+    < span class= "badge rounded-pill bg-primary ms-1" > @Model </ span >
+    </ a >
+</ li >

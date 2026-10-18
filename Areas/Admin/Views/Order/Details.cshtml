@@ -1,0 +1,269 @@
+﻿@using Project.Models
+@using System.Globalization
+@model Project.Models.Order
+
+@{
+    ViewData["Title"] = $"Order #{Model.Id}";
+    var nz = (CultureInfo)CultureInfo.GetCultureInfo("en-NZ").Clone();
+    nz.NumberFormat.CurrencySymbol = "NZ$";
+    nz.NumberFormat.CurrencyPositivePattern = 2;
+    var refundRequests = Model.RefundRequests?.ToList() ?? new List<RefundRequest>();
+    var completedRefunds = refundRequests
+        .Where(r => r.RefundStatus == SD.RefundCompleted)
+        .ToList();
+    var completedRefundAmount = completedRefunds.Sum(r => r.RefundAmount);
+    var netAmountAfterRefunds = Math.Max(Model.TotalAmount - completedRefundAmount, 0m);
+    var hasLegacyCompletedRefund = completedRefunds.Any(r =>
+        !r.OrderItemId.HasValue || !r.RefundQuantity.HasValue);
+
+    var customerName = !string.IsNullOrWhiteSpace(Model.User?.DisplayName)
+        ? Model.User!.DisplayName
+        : (!string.IsNullOrWhiteSpace(Model.User?.UserName) &&
+           !string.Equals(Model.User.UserName, Model.User.Email, StringComparison.OrdinalIgnoreCase)
+            ? Model.User.UserName
+            : "Customer");
+}
+
+<div class="container py-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
+        <div>
+            <h2 class="fw-bold">Order #@Model.Id</h2>
+            <p class="text-muted mb-0">Review order details and refund requests.</p>
+        </div>
+        <a href="@Url.Action("Index", "Order", new { area = "Admin" })" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> Back to Orders
+        </a>
+    </div>
+
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            @TempData["Success"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            @TempData["Error"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
+
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-white py-3"><h5 class="mb-0">Order Information</h5></div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <div class="text-muted small">Customer</div>
+                    <div class="fw-semibold">@customerName</div>
+                    @if (!string.IsNullOrWhiteSpace(Model.User?.Email))
+                    {
+                        <div class="text-muted small">@Model.User.Email</div>
+                    }
+                </div>
+                <div class="col-md-6">
+                    <div class="text-muted small">Order Date</div>
+                    <div class="fw-semibold">@Model.CreatedAt.ToLocalTime().ToString("dd MMM yyyy HH:mm", nz)</div>
+                </div>
+                <div class="col-md-6">
+                    <div class="text-muted small">Order Status</div>
+                    <span class="badge @(Model.OrderStatus == SD.StatusCancelled ? "bg-secondary" : Model.OrderStatus == SD.StatusApproved ? "bg-success" : "bg-warning text-dark")">@Model.OrderStatus</span>
+                </div>
+                <div class="col-md-6">
+                    <div class="text-muted small">Payment Status</div>
+                    <span class="badge @(Model.PaymentStatus == SD.PaymentPaid ? "bg-success" : Model.PaymentStatus == SD.PaymentRefunded ? "bg-danger" : "bg-secondary")">@Model.PaymentStatus</span>
+                </div>
+            </div>
+
+            <hr />
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <div class="text-muted small">Original order total</div>
+                    <div class="fw-semibold">@Model.TotalAmount.ToString("C", nz)</div>
+                </div>
+                <div class="col-md-4">
+                    <div class="text-muted small">Completed refunds</div>
+                    <div class="fw-semibold text-success">−@completedRefundAmount.ToString("C", nz)</div>
+                </div>
+                <div class="col-md-4">
+                    <div class="text-muted small">Amount after completed refunds</div>
+                    <div class="fw-bold fs-5">@netAmountAfterRefunds.ToString("C", nz)</div>
+                </div>
+            </div>
+            <p class="small text-muted mt-3 mb-0">The original order total remains unchanged for audit and transaction history. The amount after completed refunds reflects the amount retained after successful refunds.</p>
+
+            @if (hasLegacyCompletedRefund)
+            {
+                <div class="alert alert-warning mt-3 mb-0">
+                    At least one completed refund was created before the item and ticket quantity were recorded. Its amount is included in totals, but its specific attraction and ticket quantity cannot be calculated from the old request.
+                </div>
+            }
+
+            @if (!string.IsNullOrWhiteSpace(Model.StripePaymentIntentId))
+            {
+                <div class="mt-3">
+                    <div class="text-muted small">Stripe PaymentIntent</div>
+                    <div class="text-break small">@Model.StripePaymentIntentId</div>
+                </div>
+            }
+
+            @if (Model.OrderStatus == SD.StatusPending && Model.PaymentStatus == SD.PaymentPaid)
+            {
+                <hr />
+                <form action="@Url.Action("Approve", "Order", new { area = "Admin" })" method="post">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="id" value="@Model.Id" />
+                    <button type="submit" class="btn btn-success" onclick="return confirm('Approve this order?');">Approve Order</button>
+                </form>
+            }
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-white py-3"><h5 class="mb-0">Purchased Items</h5></div>
+        <div class="card-body">
+            @if (Model.Items == null || !Model.Items.Any())
+            {
+                <p class="text-muted mb-0">No order items found.</p>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Attraction</th>
+                                <th>Unit Price</th>
+                                <th>Purchased</th>
+                                <th>Refunded</th>
+                                <th>Pending / Approved</th>
+                                <th>Remaining Refundable</th>
+                                <th class="text-end">Original Subtotal</th>
+                                <th class="text-end">Value After Refunds</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in Model.Items)
+                            {
+                                var itemRefundedQuantity = completedRefunds
+                                .Where(r => r.OrderItemId == item.Id)
+                                .Sum(r => r.RefundQuantity ?? 0);
+                                var itemPendingQuantity = refundRequests
+                                .Where(r => r.OrderItemId == item.Id &&
+                                (r.RefundStatus == SD.RefundPending || r.RefundStatus == SD.RefundApproved))
+                                .Sum(r => r.RefundQuantity ?? 0);
+                                var remainingRefundableQuantity = Math.Max(item.Quantity - itemRefundedQuantity - itemPendingQuantity, 0);
+                                var quantityNotYetRefunded = Math.Max(item.Quantity - itemRefundedQuantity, 0);
+                                var originalItemAmount = item.UnitPrice * item.Quantity;
+                                var currentItemAmount = item.UnitPrice * quantityNotYetRefunded;
+                                <tr>
+                                    <td>@(item.Attraction?.Name ?? $"Attraction #{item.AttractionId}")</td>
+                                    <td>@item.UnitPrice.ToString("C", nz)</td>
+                                    <td>@item.Quantity</td>
+                                    <td>@itemRefundedQuantity</td>
+                                    <td>@itemPendingQuantity</td>
+                                    <td>@remainingRefundableQuantity</td>
+                                    <td class="text-end">@originalItemAmount.ToString("C", nz)</td>
+                                    <td class="text-end">
+                                        @if (hasLegacyCompletedRefund)
+                                        {
+                                            <span class="text-muted" title="Older completed refund has no linked order item">N/A</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="fw-semibold">@currentItemAmount.ToString("C", nz)</span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                        <tfoot>
+                            <tr>
+                                <th colspan="6" class="text-end">Original Order Total</th>
+                                <th colspan="2" class="text-end">@Model.TotalAmount.ToString("C", nz)</th>
+                            </tr>
+                            <tr>
+                                <th colspan="6" class="text-end">Completed Refunds</th>
+                                <th colspan="2" class="text-end text-success">−@completedRefundAmount.ToString("C", nz)</th>
+                            </tr>
+                            <tr>
+                                <th colspan="6" class="text-end">Amount After Completed Refunds</th>
+                                <th colspan="2" class="text-end">@netAmountAfterRefunds.ToString("C", nz)</th>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-white py-3"><h5 class="mb-0">Refund Requests</h5></div>
+        <div class="card-body">
+            @if (!refundRequests.Any())
+            {
+                <p class="text-muted mb-0">There are no refund requests for this order.</p>
+            }
+            else
+            {
+                @foreach (var refund in refundRequests.OrderByDescending(r => r.RequestedAt))
+                {
+                    <div class="border rounded-3 p-3 mb-3">
+                        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                            <h6 class="fw-bold mb-0">Refund Request #@refund.Id</h6>
+                            <span class="badge @(refund.RefundStatus == SD.RefundPending ? "bg-danger" : refund.RefundStatus == SD.RefundRejected ? "bg-secondary" : refund.RefundStatus == SD.RefundCompleted ? "bg-success" : "bg-warning text-dark")">@refund.RefundStatus</span>
+                        </div>
+
+                        <p class="mb-1"><strong>Attraction:</strong> @(refund.OrderItem?.Attraction?.Name ?? (refund.OrderItemId.HasValue ? $"Order item #{refund.OrderItemId}" : "Older order-level request"))</p>
+                        <p class="mb-1"><strong>Refund Quantity:</strong> @(refund.RefundQuantity?.ToString() ?? "Not recorded in this older request")</p>
+                        <p class="mb-1"><strong>Requested Date:</strong> @refund.RequestedAt.ToLocalTime().ToString("dd MMM yyyy HH:mm", nz)</p>
+                        <p class="mb-1"><strong>Reason:</strong> @refund.Reason</p>
+                        <p class="mb-1"><strong>Requested Amount:</strong> @refund.RefundAmount.ToString("C", nz)</p>
+
+                        @if (!string.IsNullOrWhiteSpace(refund.StripeRefundId))
+                        {
+                            <p class="mb-1 text-break"><strong>Stripe Refund ID:</strong> @refund.StripeRefundId</p>
+                        }
+                        @if (refund.ReviewedAt.HasValue)
+                        {
+                            <p class="mb-1"><strong>Reviewed Date:</strong> @refund.ReviewedAt.Value.ToLocalTime().ToString("dd MMM yyyy HH:mm", nz)</p>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(refund.AdminRemarks))
+                        {
+                            <div class="alert alert-light border mt-3"><strong>Message to Customer</strong><p class="mb-0 mt-1">@refund.AdminRemarks</p></div>
+                        }
+
+                        @if (refund.RefundStatus == SD.RefundPending)
+                        {
+                            <hr />
+                            @if (refund.OrderItemId.HasValue && refund.RefundQuantity.HasValue)
+                            {
+                                <div class="small text-muted mb-3">This request will refund @refund.RefundQuantity ticket(s) at @((refund.OrderItem?.UnitPrice ?? 0m).ToString("C", nz)) per ticket, for a total of @refund.RefundAmount.ToString("C", nz).</div>
+                                <form action="@Url.Action("ApproveRefund", "Order", new { area = "Admin" })" method="post" class="mb-3">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="refundRequestId" value="@refund.Id" />
+                                    <label class="form-label fw-semibold" for="approve-remarks-@refund.Id">Message to Customer (optional)</label>
+                                    <textarea id="approve-remarks-@refund.Id" name="adminRemarks" class="form-control mb-3" maxlength="1000" rows="2" placeholder="Add a message about the approved refund."></textarea>
+                                    <button type="submit" class="btn btn-success" onclick="return confirm('Submit a real refund through Stripe?');"><i class="bi bi-credit-card"></i> Approve Refund</button>
+                                </form>
+                            }
+                            else
+                            {
+                                <div class="alert alert-warning">This older order-level refund request does not contain a specific attraction or quantity and cannot be automatically processed by the item-level workflow.</div>
+                            }
+
+                            <form action="@Url.Action("RejectRefund", "Order", new { area = "Admin" })" method="post">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="refundRequestId" value="@refund.Id" />
+                                <label class="form-label fw-semibold" for="reject-remarks-@refund.Id">Reason for Rejection (required)</label>
+                                <textarea id="reject-remarks-@refund.Id" name="adminRemarks" class="form-control mb-3" maxlength="1000" rows="3" required placeholder="Explain why the refund is rejected."></textarea>
+                                <button type="submit" class="btn btn-danger" onclick="return confirm('Reject this refund request?');"><i class="bi bi-x-circle"></i> Reject Refund</button>
+                            </form>
+                        }
+                    </div>
+                }
+            }
+        </div>
+    </div>
+</div>

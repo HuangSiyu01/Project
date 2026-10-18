@@ -1,0 +1,304 @@
+﻿@using Project.Models
+@using System.Globalization
+@model Project.Models.Order
+
+@{
+    ViewData["Title"] = $"Order #{Model.Id}";
+    var nz = (CultureInfo)CultureInfo.GetCultureInfo("en-NZ").Clone();
+    nz.NumberFormat.CurrencySymbol = "NZ$";
+    nz.NumberFormat.CurrencyPositivePattern = 2;
+    var refundRequests = Model.RefundRequests?.ToList() ?? new List<RefundRequest>();
+    var completedRefunds = refundRequests
+        .Where(r => r.RefundStatus == SD.RefundCompleted)
+        .ToList();
+    var activeStatuses = new[] { SD.RefundPending, SD.RefundApproved, SD.RefundCompleted };
+    var completedRefundAmount = completedRefunds.Sum(r => r.RefundAmount);
+    var netAmountAfterRefunds = Math.Max(Model.TotalAmount - completedRefundAmount, 0m);
+    var hasLegacyCompletedRefund = completedRefunds.Any(r =>
+        !r.OrderItemId.HasValue || !r.RefundQuantity.HasValue);
+    var hasActiveLegacyRequest = refundRequests.Any(r =>
+        !r.OrderItemId.HasValue &&
+        (r.RefundStatus == SD.RefundPending || r.RefundStatus == SD.RefundApproved));
+
+    var canRequestRefund =
+        Model.PaymentStatus == SD.PaymentPaid &&
+        Model.OrderStatus != SD.StatusCancelled &&
+        !hasActiveLegacyRequest &&
+        (Model.Items?.Any(item =>
+            item.Quantity - refundRequests
+                .Where(r => r.OrderItemId == item.Id && activeStatuses.Contains(r.RefundStatus))
+                .Sum(r => r.RefundQuantity ?? 0) > 0) ?? false);
+}
+
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4 gap-3 flex-wrap">
+        <div>
+            <h2 class="fw-bold">Order #@Model.Id</h2>
+            <p class="text-muted mb-0">Order details and refund information</p>
+        </div>
+        <a asp-area="Customer" asp-controller="Orders" asp-action="Index" class="btn btn-outline-secondary">
+            Back to My Orders
+        </a>
+    </div>
+
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert alert-success">@TempData["Success"]</div>
+    }
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert alert-danger">@TempData["Error"]</div>
+    }
+
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-white py-3"><h5 class="mb-0">Order Information</h5></div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <div class="text-muted small">Order Date</div>
+                    <div class="fw-semibold">@Model.CreatedAt.ToLocalTime().ToString("dd MMM yyyy HH:mm", nz)</div>
+                </div>
+                <div class="col-md-6">
+                    <div class="text-muted small">Order Status</div>
+                    <span class="badge @(Model.OrderStatus == SD.StatusCancelled ? "bg-secondary" : Model.OrderStatus == SD.StatusPending ? "bg-warning text-dark" : "bg-success")">@Model.OrderStatus</span>
+                </div>
+                <div class="col-md-6">
+                    <div class="text-muted small">Payment Status</div>
+                    <span class="badge @(Model.PaymentStatus == SD.PaymentPaid ? "bg-success" : Model.PaymentStatus == SD.PaymentRefunded ? "bg-danger" : "bg-secondary")">@Model.PaymentStatus</span>
+                </div>
+            </div>
+
+            <hr />
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <div class="text-muted small">Original order total</div>
+                    <div class="fw-semibold">@Model.TotalAmount.ToString("C", nz)</div>
+                </div>
+                <div class="col-md-4">
+                    <div class="text-muted small">Completed refunds</div>
+                    <div class="fw-semibold text-success">−@completedRefundAmount.ToString("C", nz)</div>
+                </div>
+                <div class="col-md-4">
+                    <div class="text-muted small">Amount after completed refunds</div>
+                    <div class="fw-bold fs-5">@netAmountAfterRefunds.ToString("C", nz)</div>
+                </div>
+            </div>
+            <p class="small text-muted mt-3 mb-0">The original order total is kept for transaction history. The amount after completed refunds shows the net amount retained after successful refunds.</p>
+
+            @if (hasLegacyCompletedRefund)
+            {
+                <div class="alert alert-warning mt-3 mb-0">
+                    At least one completed refund was created before ticket-level refund information was recorded. Its amount is included in the totals, but the affected attraction and ticket quantity cannot be determined from that old record.
+                </div>
+            }
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-white py-3"><h5 class="mb-0">Purchased Attractions</h5></div>
+        <div class="card-body">
+            @if (Model.Items == null || !Model.Items.Any())
+            {
+                <p class="text-muted mb-0">No order items found.</p>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Attraction</th>
+                                <th>Unit Price</th>
+                                <th>Purchased</th>
+                                <th>Refunded</th>
+                                <th>Pending / Approved</th>
+                                <th>Remaining Refundable</th>
+                                <th class="text-end">Original Subtotal</th>
+                                <th class="text-end">Value After Refunds</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in Model.Items)
+                            {
+                                var itemRefundedQuantity = completedRefunds
+                                .Where(r => r.OrderItemId == item.Id)
+                                .Sum(r => r.RefundQuantity ?? 0);
+                                var itemPendingQuantity = refundRequests
+                                .Where(r => r.OrderItemId == item.Id &&
+                                (r.RefundStatus == SD.RefundPending || r.RefundStatus == SD.RefundApproved))
+                                .Sum(r => r.RefundQuantity ?? 0);
+                                var remainingRefundableQuantity = Math.Max(item.Quantity - itemRefundedQuantity - itemPendingQuantity, 0);
+                                var quantityNotYetRefunded = Math.Max(item.Quantity - itemRefundedQuantity, 0);
+                                var originalItemAmount = item.UnitPrice * item.Quantity;
+                                var currentItemAmount = item.UnitPrice * quantityNotYetRefunded;
+                                <tr>
+                                    <td>@(item.Attraction?.Name ?? $"Attraction #{item.AttractionId}")</td>
+                                    <td>@item.UnitPrice.ToString("C", nz)</td>
+                                    <td>@item.Quantity</td>
+                                    <td>@itemRefundedQuantity</td>
+                                    <td>@itemPendingQuantity</td>
+                                    <td>@remainingRefundableQuantity</td>
+                                    <td class="text-end">@originalItemAmount.ToString("C", nz)</td>
+                                    <td class="text-end">
+                                        @if (hasLegacyCompletedRefund)
+                                        {
+                                            <span class="text-muted" title="Older completed refund has no linked order item">N/A</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="fw-semibold">@currentItemAmount.ToString("C", nz)</span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-white py-3"><h5 class="mb-0">Refund History</h5></div>
+        <div class="card-body">
+            @if (!refundRequests.Any())
+            {
+                <p class="text-muted mb-0">No refund requests have been submitted for this order.</p>
+            }
+            else
+            {
+                @foreach (var refund in refundRequests.OrderByDescending(r => r.RequestedAt))
+                {
+                    <div class="border rounded-3 p-3 mb-3">
+                        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+                            <h6 class="mb-0 fw-bold">Refund Request #@refund.Id</h6>
+                            <span class="badge @(refund.RefundStatus == SD.RefundCompleted ? "bg-success" : refund.RefundStatus == SD.RefundRejected ? "bg-secondary" : refund.RefundStatus == SD.RefundPending ? "bg-danger" : "bg-warning text-dark")">@refund.RefundStatus</span>
+                        </div>
+                        <p class="mb-1"><strong>Attraction:</strong> @(refund.OrderItem?.Attraction?.Name ?? (refund.OrderItemId.HasValue ? $"Order item #{refund.OrderItemId}" : "Older order-level request"))</p>
+                        <p class="mb-1"><strong>Refund Quantity:</strong> @(refund.RefundQuantity?.ToString() ?? "Not recorded in this older request")</p>
+                        <p class="mb-1"><strong>Requested Date:</strong> @refund.RequestedAt.ToLocalTime().ToString("dd MMM yyyy HH:mm", nz)</p>
+                        <p class="mb-1"><strong>Reason:</strong> @refund.Reason</p>
+                        <p class="mb-1"><strong>Refund Amount:</strong> @refund.RefundAmount.ToString("C", nz)</p>
+                        @if (!string.IsNullOrWhiteSpace(refund.StripeRefundId))
+                        {
+                            <p class="mb-1 text-break"><strong>Stripe Refund ID:</strong> @refund.StripeRefundId</p>
+                        }
+                        @if (refund.ReviewedAt.HasValue)
+                        {
+                            <p class="mb-1"><strong>Reviewed Date:</strong> @refund.ReviewedAt.Value.ToLocalTime().ToString("dd MMM yyyy HH:mm", nz)</p>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(refund.AdminRemarks))
+                        {
+                            <div class="alert alert-light border mt-3 mb-0">
+                                <strong>Message from Admin</strong>
+                                <p class="mb-0 mt-1">@refund.AdminRemarks</p>
+                            </div>
+                        }
+                    </div>
+                }
+            }
+        </div>
+    </div>
+
+    @if (canRequestRefund)
+    {
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header bg-white py-3"><h5 class="mb-0">Request a Partial or Full Item Refund</h5></div>
+            <div class="card-body">
+                <p class="text-muted">Choose the attraction and the number of tickets you want refunded. The amount will be recalculated by the server and the request will be reviewed by an administrator.</p>
+                <form asp-area="Customer" asp-controller="Orders" asp-action="RequestRefund" method="post">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="orderId" value="@Model.Id" />
+
+                    <div class="mb-3">
+                        <label for="orderItemId" class="form-label">Attraction</label>
+                        <select id="orderItemId" name="orderItemId" class="form-select" required>
+                            @foreach (var item in Model.Items ?? new List<OrderItem>())
+                            {
+                                var reserved = refundRequests
+                                .Where(r => r.OrderItemId == item.Id && activeStatuses.Contains(r.RefundStatus))
+                                .Sum(r => r.RefundQuantity ?? 0);
+                                var remaining = Math.Max(item.Quantity - reserved, 0);
+                                if (remaining > 0)
+                                {
+                                    <option value="@item.Id" data-remaining="@remaining" data-unit-price="@item.UnitPrice.ToString(CultureInfo.InvariantCulture)">
+                                        @(item.Attraction?.Name ?? $"Attraction #{item.AttractionId}") — @remaining ticket(s) available for refund
+                                    </option>
+                                }
+                            }
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="refundQuantity" class="form-label">Refund Quantity</label>
+                        <input id="refundQuantity" name="refundQuantity" type="number" class="form-control" min="1" value="1" required />
+                        <div class="form-text">The maximum is based on the selected item's remaining refundable quantity.</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <div class="text-muted small">Estimated Refund Amount</div>
+                        <div id="refundEstimate" class="fs-5 fw-bold">—</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="reason" class="form-label">Refund Reason</label>
+                        <textarea id="reason" name="reason" class="form-control" rows="4" maxlength="1000" required placeholder="Please explain your reason for requesting a refund."></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-danger" onclick="return confirm('Submit this refund request for review?');">Submit Refund Request</button>
+                </form>
+            </div>
+        </div>
+    }
+    else if (hasActiveLegacyRequest)
+    {
+        <div class="alert alert-warning">An older order-level refund request is still under review. Please wait until it has been reviewed before submitting an item-level refund request.</div>
+    }
+    else if (Model.PaymentStatus != SD.PaymentPaid)
+    {
+        <div class="alert alert-secondary">Refund requests are available only for paid orders.</div>
+    }
+    else if (Model.OrderStatus == SD.StatusCancelled)
+    {
+        <div class="alert alert-secondary">Refund requests are not available for cancelled orders.</div>
+    }
+    else
+    {
+        <div class="alert alert-secondary">There are no remaining tickets available for refund in this order.</div>
+    }
+</div>
+
+@section Scripts {
+    <script>
+        (function () {
+            const itemSelect = document.getElementById('orderItemId');
+            const quantityInput = document.getElementById('refundQuantity');
+            const estimate = document.getElementById('refundEstimate');
+            if (!itemSelect || !quantityInput || !estimate) return;
+
+            function updateEstimate() {
+                const selected = itemSelect.options[itemSelect.selectedIndex];
+                if (!selected) {
+                    estimate.textContent = '—';
+                    return;
+                }
+
+                const remaining = Number.parseInt(selected.dataset.remaining || '0', 10);
+                const unitPrice = Number.parseFloat(selected.dataset.unitPrice || '0');
+                quantityInput.max = String(remaining);
+
+                let quantity = Number.parseInt(quantityInput.value || '1', 10);
+                if (!Number.isFinite(quantity) || quantity < 1) quantity = 1;
+                if (quantity > remaining) quantity = remaining;
+                quantityInput.value = String(quantity);
+
+                estimate.textContent = new Intl.NumberFormat('en-NZ', {
+                    style: 'currency', currency: 'NZD'
+                }).format(unitPrice * quantity);
+            }
+
+            itemSelect.addEventListener('change', updateEstimate);
+            quantityInput.addEventListener('input', updateEstimate);
+            updateEstimate();
+        })();
+    </script>
+}

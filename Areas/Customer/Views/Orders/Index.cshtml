@@ -1,0 +1,199 @@
+﻿@using Project.Models
+@using System.Globalization
+@model IEnumerable<Project.Models.Order>
+
+@{
+    ViewData["Title"] = "My Orders";
+    var nz = (CultureInfo)CultureInfo.GetCultureInfo("en-NZ").Clone();
+    nz.NumberFormat.CurrencySymbol = "NZ$";
+    nz.NumberFormat.CurrencyPositivePattern = 2;
+}
+
+<div class="container py-4">
+    <div class="mb-4">
+        <h2 class="fw-bold">My Orders</h2>
+        <p class="text-muted">View your purchases and manage refund requests.</p>
+    </div>
+
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert alert-success">@TempData["Success"]</div>
+    }
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert alert-danger">@TempData["Error"]</div>
+    }
+
+    @if (Model == null || !Model.Any())
+    {
+        <div class="card border-0 shadow-sm">
+            <div class="card-body text-center py-5">
+                <h5>No orders yet</h5>
+                <p class="text-muted">Your completed purchases will appear here.</p>
+                <a asp-area="Customer"
+                   asp-controller="Home"
+                   asp-action="Index"
+                   class="btn btn-primary">
+                    Back to Homepage
+                </a>
+            </div>
+        </div>
+    }
+    else
+    {
+        @foreach (var order in Model.OrderByDescending(o => o.CreatedAt))
+        {
+            var refunds = order.RefundRequests?.ToList() ?? new List<RefundRequest>();
+            var completedRefunds = refunds
+            .Where(r => r.RefundStatus == SD.RefundCompleted)
+            .ToList();
+            var latestRefund = refunds
+            .OrderByDescending(r => r.RequestedAt)
+            .FirstOrDefault();
+
+            var refundedAmount = completedRefunds.Sum(r => r.RefundAmount);
+            var netAmount = Math.Max(order.TotalAmount - refundedAmount, 0m);
+            var legacyCompletedRefundExists = completedRefunds.Any(r =>
+            !r.OrderItemId.HasValue || !r.RefundQuantity.HasValue);
+
+            var orderClass = order.OrderStatus == SD.StatusCancelled
+            ? "bg-secondary"
+            : order.OrderStatus == SD.StatusPending
+            ? "bg-warning text-dark"
+            : "bg-success";
+
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-header bg-white py-3">
+                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                        <div>
+                            <span class="fw-bold">Order #@order.Id</span>
+                            <div class="small text-muted">@order.CreatedAt.ToLocalTime().ToString("dd MMM yyyy HH:mm", nz)</div>
+                        </div>
+                        <div class="d-flex flex-wrap gap-2">
+                            <span class="badge @orderClass">@order.OrderStatus</span>
+                            <span class="badge @(order.PaymentStatus == SD.PaymentPaid ? "bg-success" : order.PaymentStatus == SD.PaymentRefunded ? "bg-danger" : "bg-secondary")">
+                                @order.PaymentStatus
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card-body">
+                    @if (order.Items != null && order.Items.Any())
+                    {
+                        @foreach (var item in order.Items)
+                        {
+                            var itemRefundedQuantity = completedRefunds
+                            .Where(r => r.OrderItemId == item.Id)
+                            .Sum(r => r.RefundQuantity ?? 0);
+                            var itemPendingQuantity = refunds
+                            .Where(r => r.OrderItemId == item.Id &&
+                            (r.RefundStatus == SD.RefundPending || r.RefundStatus == SD.RefundApproved))
+                            .Sum(r => r.RefundQuantity ?? 0);
+                            var itemRemainingQuantity = Math.Max(item.Quantity - itemRefundedQuantity, 0);
+                            var originalItemAmount = item.UnitPrice * item.Quantity;
+                            var currentItemAmount = item.UnitPrice * itemRemainingQuantity;
+
+                            <div class="d-flex justify-content-between align-items-start border-bottom py-3 gap-3">
+                                <div class="flex-grow-1">
+                                    <div class="fw-semibold">@(item.Attraction?.Name ?? $"Attraction #{item.AttractionId}")</div>
+                                    <div class="small text-muted mt-1">
+                                        Purchased: @item.Quantity
+                                        <span class="mx-1">·</span>
+                                        Refunded: @itemRefundedQuantity
+                                        <span class="mx-1">·</span>
+                                        Remaining: @itemRemainingQuantity
+                                    </div>
+                                    @if (itemPendingQuantity > 0)
+                                    {
+                                        <div class="small text-warning mt-1">
+                                            Refund under review: @itemPendingQuantity ticket(s)
+                                        </div>
+                                    }
+                                </div>
+
+                                <div class="text-end text-nowrap">
+                                    @if (!legacyCompletedRefundExists)
+                                    {
+                                        <div class="fw-semibold">@currentItemAmount.ToString("C", nz)</div>
+                                        @if (itemRefundedQuantity > 0)
+                                        {
+                                            <div class="small text-muted">
+                                                Original: <s>@originalItemAmount.ToString("C", nz)</s>
+                                            </div>
+                                            <div class="small text-success">
+                                                Refunded: @((item.UnitPrice * itemRefundedQuantity).ToString("C", nz))
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <div class="small text-muted">Item value</div>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <div class="fw-semibold">@originalItemAmount.ToString("C", nz)</div>
+                                        <div class="small text-muted" style="max-width: 220px; white-space: normal;">
+                                            Item-level value unavailable: an older refund is not linked to a specific ticket item.
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    }
+
+                    <div class="row g-3 mt-2">
+                        <div class="col-md-4">
+                            <div class="text-muted small">Original order total</div>
+                            <div class="fw-semibold">@order.TotalAmount.ToString("C", nz)</div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="text-muted small">Completed refunds</div>
+                            <div class="fw-semibold text-success">−@refundedAmount.ToString("C", nz)</div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="text-muted small">Amount after completed refunds</div>
+                            <div class="fs-5 fw-bold">@netAmount.ToString("C", nz)</div>
+                        </div>
+                    </div>
+
+                    @if (legacyCompletedRefundExists)
+                    {
+                        <div class="alert alert-warning mt-3 mb-0">
+                            This order has a completed refund from an older request that does not identify the attraction or ticket quantity. The refunded amount is included above, but the per-item refunded ticket count cannot be determined automatically.
+                        </div>
+                    }
+
+                    <div class="d-flex flex-wrap justify-content-end mt-3 gap-2">
+                        <a asp-area="Customer"
+                           asp-controller="Orders"
+                           asp-action="Details"
+                           asp-route-id="@order.Id"
+                           class="btn btn-outline-primary">
+                            View Details
+                        </a>
+                    </div>
+
+                    @if (latestRefund != null)
+                    {
+                        <div class="alert alert-light border mt-3 mb-0">
+                            <div class="fw-semibold">
+                                Latest Refund Status:
+                                <span class="@(latestRefund.RefundStatus == SD.RefundCompleted ? "text-success" : latestRefund.RefundStatus == SD.RefundRejected ? "text-secondary" : "text-danger")">
+                                    @latestRefund.RefundStatus
+                                </span>
+                            </div>
+                            <div class="small text-muted mt-1">
+                                Latest request amount: @latestRefund.RefundAmount.ToString("C", nz)
+                            </div>
+                            @if (!string.IsNullOrWhiteSpace(latestRefund.AdminRemarks))
+                            {
+                                <div class="mt-2"><strong>Admin Remarks:</strong> @latestRefund.AdminRemarks</div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+    }
+</div>

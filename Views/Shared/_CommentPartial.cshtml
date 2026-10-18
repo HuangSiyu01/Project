@@ -1,0 +1,54 @@
+﻿@model Project.Models.Comment
+@using Microsoft.AspNetCore.Identity
+@inject UserManager<ApplicationUser> UserManager
+
+@{
+    var currentUserId = UserManager.GetUserId(User);
+}
+
+<div class="mb-2 p-2 rounded bg-light border-start border-3 border-secondary">
+    <div class="d-flex justify-content-between">
+        <strong>
+            <i class="bi bi-person-circle"></i> @Model.User?.DisplayName
+            @if (Model.ParentComment != null)
+            {
+                <span class="text-muted fw-normal">
+                    replied to <span class="text-primary">@Model.ParentComment.User?.DisplayName</span>
+                </span>
+            }
+        </strong>
+        <small class="text-muted">@Model.CreatedAt.ToString("g")</small>
+    </div>
+    <p class="mb-1">@Model.Content</p>
+
+    @if (currentUserId == Model.UserId)
+    {
+        <form asp-controller="Comment" asp-action="Delete" method="post" class="d-inline">
+            <input type="hidden" name="id" value="@Model.Id" />
+            <input type="hidden" name="postId" value="@Model.PostId" />
+            <button type="submit" class="btn btn-sm btn-link text-danger p-0">
+                <i class="bi bi-trash"></i> Delete
+            </button>
+        </form>
+    }
+
+    @if (User.Identity != null && User.Identity.IsAuthenticated)
+    {
+        <button type="button" class="btn btn-sm btn-link p-0 ms-2 toggle-reply"
+                data-target="reply-@Model.Id">
+            <i class="bi bi-reply"></i> Reply
+        </button>
+
+        <div id="reply-@Model.Id" class="mt-2 d-none">
+            <form asp-controller="Comment" asp-action="Create" method="post">
+                <input type="hidden" name="postId" value="@Model.PostId" />
+                <input type="hidden" name="parentCommentId" value="@Model.Id" />
+                <div class="input-group">
+                    <input type="text" name="content" class="form-control"
+                           placeholder="Reply to @Model.User?.DisplayName..." required maxlength="500" />
+                    <button type="submit" class="btn btn-primary">Reply</button>
+                </div>
+            </form>
+        </div>
+    }
+</div>

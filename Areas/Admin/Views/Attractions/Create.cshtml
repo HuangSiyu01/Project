@@ -1,0 +1,143 @@
+﻿@model AttractionFormViewModel
+
+@{
+    ViewData["Title"] = "Add Attraction";
+}
+
+<div class="container py-4" style="max-width:980px;">
+    <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-4">
+        <div>
+            <h1 class="fw-bold mb-1">Add Attraction</h1>
+            <p class="text-muted mb-0">New attractions will use the same card and detail pages as existing attractions.</p>
+        </div>
+        <a asp-area="Admin" asp-controller="Attractions" asp-action="Index" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> Back to Attractions
+        </a>
+    </div>
+
+    <div class="card border-0 shadow-sm">
+        <div class="card-body p-4">
+            <form asp-area="Admin" asp-controller="Attractions" asp-action="Create" method="post" enctype="multipart/form-data">
+                @Html.AntiForgeryToken()
+                <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+
+                <div class="mb-3">
+                    <label asp-for="Name" class="form-label fw-semibold"></label>
+                    <input asp-for="Name" class="form-control" maxlength="120" placeholder="e.g. Mount Cook National Park" />
+                    <span asp-validation-for="Name" class="text-danger small"></span>
+                </div>
+
+                <div class="mb-3">
+                    <label asp-for="City" class="form-label fw-semibold"></label>
+                    <input asp-for="City" class="form-control" maxlength="100" placeholder="e.g. Canterbury, New Zealand" />
+                    <span asp-validation-for="City" class="text-danger small"></span>
+                </div>
+
+                <div class="mb-3">
+                    <label asp-for="Description" class="form-label fw-semibold"></label>
+                    <textarea asp-for="Description" class="form-control" rows="5" maxlength="2000" placeholder="Describe the attraction and what visitors can experience."></textarea>
+                    <span asp-validation-for="Description" class="text-danger small"></span>
+                </div>
+
+                <div class="mb-3">
+                    <label asp-for="TicketPrice" class="form-label fw-semibold"></label>
+                    <div class="input-group">
+                        <span class="input-group-text">NZ$</span>
+                        <input asp-for="TicketPrice" type="number" class="form-control" min="0.01" max="10000" step="0.01" />
+                    </div>
+                    <span asp-validation-for="TicketPrice" class="text-danger small"></span>
+                </div>
+
+                <div class="mb-3">
+                    <label for="MainImage" class="form-label fw-semibold">Main Image <span class="text-danger">*</span></label>
+                    <input type="file" id="MainImage" name="MainImage" class="form-control" accept=".jpg,.jpeg,.png,.webp,.gif" required />
+                    <div class="form-text">This image appears on the attraction search card. Supported formats: JPG, JPEG, PNG, WEBP, GIF. Maximum 20 MB.</div>
+                    <span asp-validation-for="MainImage" class="text-danger small"></span>
+                </div>
+
+                <div class="mb-3">
+                    <label for="AdditionalImages" class="form-label fw-semibold">Additional Photos (optional)</label>
+                    <input type="file" id="AdditionalImages" name="AdditionalImages" class="form-control" accept=".jpg,.jpeg,.png,.webp,.gif" multiple />
+                    <div class="form-text">Upload up to 10 additional photos (besides the main image), each no larger than 20 MB. You can select them together or add more in multiple selections. They appear in the attraction detail gallery.</div>
+                    <div id="additionalImagesCount" class="small text-muted mt-1" aria-live="polite">0 / 10 additional photos selected</div>
+                    <div id="additionalImagesStatus" class="small mt-1" role="status" aria-live="polite"></div>
+                    <button type="button" id="clearAdditionalImages" class="btn btn-sm btn-outline-secondary mt-2">Clear selected photos</button>
+                    <span asp-validation-for="AdditionalImages" class="text-danger small"></span>
+                </div>
+
+                <div class="form-check form-switch mb-4">
+                    <input asp-for="IsAvailable" class="form-check-input" />
+                    <label asp-for="IsAvailable" class="form-check-label"></label>
+                    <div class="form-text">When enabled, customers can find this attraction through Attraction Tickets search.</div>
+                </div>
+
+                <div class="d-flex flex-wrap gap-2">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-cloud-upload"></i> Publish Attraction
+                    </button>
+                    <a asp-area="Admin" asp-controller="Attractions" asp-action="Index" class="btn btn-outline-secondary">Cancel</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        (function () {
+            const input = document.getElementById('AdditionalImages');
+            const count = document.getElementById('additionalImagesCount');
+            const status = document.getElementById('additionalImagesStatus');
+            const clearButton = document.getElementById('clearAdditionalImages');
+            if (!input || !count || !status || !clearButton) return;
+
+            const maxFiles = 10;
+            const maxBytes = 20 * 1024 * 1024;
+            let selectedFiles = [];
+
+            function sameFile(a, b) {
+                return a.name === b.name && a.size === b.size && a.lastModified === b.lastModified;
+            }
+
+            function updateInput() {
+                const transfer = new DataTransfer();
+                selectedFiles.forEach(file => transfer.items.add(file));
+                input.files = transfer.files;
+                count.textContent = `${selectedFiles.length} / ${maxFiles} additional photos selected`;
+            }
+
+            input.addEventListener('change', function () {
+                const newlyPicked = Array.from(input.files || []);
+                const messages = [];
+
+                for (const file of newlyPicked) {
+                    if (file.size > maxBytes) {
+                        messages.push(`${file.name} is larger than 20 MB and was skipped.`);
+                        continue;
+                    }
+                    if (selectedFiles.some(existing => sameFile(existing, file))) {
+                        continue;
+                    }
+                    if (selectedFiles.length >= maxFiles) {
+                        messages.push('The limit is 10 additional photos. The extra files were skipped.');
+                        break;
+                    }
+                    selectedFiles.push(file);
+                }
+
+                updateInput();
+                status.className = messages.length ? 'small mt-1 text-danger' : 'small mt-1 text-success';
+                status.textContent = messages.length ? messages.join(' ') : (selectedFiles.length ? 'Photos are ready to upload.' : '');
+            });
+
+            clearButton.addEventListener('click', function () {
+                selectedFiles = [];
+                input.value = '';
+                updateInput();
+                status.className = 'small mt-1 text-muted';
+                status.textContent = 'Selected photos cleared.';
+            });
+        })();
+    </script>
+}

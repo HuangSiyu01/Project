@@ -1,0 +1,387 @@
+﻿@using System.Globalization
+@using Project.Models
+
+@{
+    ViewData["Title"] = "Shopping Cart";
+
+    var cartItems = ViewBag.CartItems as List<CartItem>
+                    ?? new List<CartItem>();
+
+    var attractions = ViewBag.Attractions as List<Attraction>
+                      ?? new List<Attraction>();
+
+    var attractionLookup = attractions.ToDictionary(a => a.Id);
+}
+
+<div class="container mt-4 mb-5">
+    <div class="d-none" aria-hidden="true">
+        @Html.AntiForgeryToken()
+    </div>
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>Shopping Cart</h2>
+
+        @if (cartItems.Count > 0)
+        {
+            <form asp-controller="Cart"
+                  asp-action="Clear"
+                  method="post"
+                  onsubmit="return confirm('Are you sure you want to clear your cart?');">
+                @Html.AntiForgeryToken()
+
+                <button type="submit" class="btn btn-outline-danger">
+                    Clear Cart
+                </button>
+            </form>
+        }
+    </div>
+
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="alert alert-success" role="alert">
+            @TempData["SuccessMessage"]
+        </div>
+    }
+
+    @if (TempData["ErrorMessage"] != null)
+    {
+        <div class="alert alert-danger" role="alert">
+            @TempData["ErrorMessage"]
+        </div>
+    }
+
+    @if (cartItems.Count == 0)
+    {
+        <div class="card shadow-sm">
+            <div class="card-body text-center py-5">
+                <h4>Your cart is empty</h4>
+
+                <p class="text-muted">
+                    Browse our attractions and add tickets to your cart.
+                </p>
+
+                <a asp-area="" asp-controller="Home" asp-action="Index"
+                   class="btn btn-primary">
+                    Back to Homepage
+                </a>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-bordered table-hover align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th style="width: 50px;">
+                            <input type="checkbox"
+                                   id="selectAll"
+                                   aria-label="Select all items" />
+                        </th>
+
+                        <th>Attraction</th>
+                        <th>Unit Price (NZD)</th>
+                        <th style="width: 190px;">Quantity</th>
+                        <th>Subtotal (NZD)</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    @foreach (var item in cartItems)
+                    {
+                        if (!attractionLookup.TryGetValue(
+                        item.AttractionId, out var attraction))
+                        {
+                            continue;
+                        }
+
+                        <tr class="cart-row"
+                            data-price="@attraction.TicketPrice.ToString(CultureInfo.InvariantCulture)"
+                            data-quantity="@item.Quantity">
+
+                            <td>
+                                <input type="checkbox"
+                                       class="item-checkbox"
+                                       value="@attraction.Id"
+                                       aria-label="Select @attraction.Name" />
+                            </td>
+
+                            <td>
+                                <div class="d-flex align-items-center gap-3">
+                                    <img src="@attraction.ImageUrl"
+                                         alt="@attraction.Name"
+                                         style="width: 100px; height: 75px; object-fit: cover;"
+                                         class="rounded" />
+
+                                    <div>
+                                        <strong>@attraction.Name</strong>
+
+                                        <div class="text-muted small">
+                                            @attraction.City
+                                        </div>
+                                    </div>
+                                </div>
+                            </td>
+
+                            <td>
+                                NZ$ @attraction.TicketPrice.ToString("N2", CultureInfo.InvariantCulture)
+                            </td>
+
+                            <td>
+                                <form asp-controller="Cart"
+                                      asp-action="UpdateQuantity"
+                                      method="post"
+                                      class="d-flex align-items-center gap-2">
+                                    @Html.AntiForgeryToken()
+
+                                    <input type="hidden"
+                                           name="attractionId"
+                                           value="@attraction.Id" />
+
+                                    <input type="number"
+                                           name="quantity"
+                                           value="@item.Quantity"
+                                           min="1"
+                                           max="20"
+                                           required
+                                           class="form-control form-control-sm"
+                                           style="width: 80px;" />
+
+                                    <button type="submit"
+                                            class="btn btn-sm btn-outline-primary">
+                                        Update
+                                    </button>
+                                </form>
+                            </td>
+
+                            <td class="subtotal">
+                                NZ$ @((attraction.TicketPrice * item.Quantity).ToString("N2", CultureInfo.InvariantCulture))
+                            </td>
+
+                            <td>
+                                <form asp-controller="Cart"
+                                      asp-action="Remove"
+                                      method="post"
+                                      onsubmit="return confirm('Remove this attraction from your cart?');">
+                                    @Html.AntiForgeryToken()
+
+                                    <input type="hidden"
+                                           name="attractionId"
+                                           value="@attraction.Id" />
+
+                                    <button type="submit"
+                                            class="btn btn-sm btn-outline-danger">
+                                        Remove
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <div class="card shadow-sm mt-4">
+            <div class="card-body">
+
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <span>
+                        Selected items:
+                        <strong id="selectedCount">0</strong>
+                    </span>
+
+                    <div class="text-end">
+                        <div class="text-muted">Selected Total (NZD)</div>
+
+                        <h3 class="mb-0">
+                            <span>NZ$ </span><span id="selectedTotal">0.00</span>
+                        </h3>
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-between">
+                    <a asp-area="" asp-controller="Home" asp-action="Index"
+                       class="btn btn-outline-secondary">
+                        Back to Homepage
+                    </a>
+
+                    <button type="button"
+                            id="checkoutButton"
+                            class="btn btn-primary"
+                            disabled>
+                        Checkout Selected
+                    </button>
+                </div>
+
+                <div id="checkoutMessage"
+                     class="alert alert-warning mt-3 d-none"
+                     role="alert">
+                    Please select at least one attraction.
+                </div>
+
+                @* Dedicated token for the JSON checkout API request. *@
+                <div id="checkoutAntiforgeryToken" class="d-none">
+                    @Html.AntiForgeryToken()
+                </div>
+
+            </div>
+        </div>
+    }
+</div>
+
+@section Scripts {
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            const selectAll = document.getElementById("selectAll");
+
+            const itemCheckboxes =
+                document.querySelectorAll(".item-checkbox");
+
+            const selectedCount =
+                document.getElementById("selectedCount");
+
+            const selectedTotal =
+                document.getElementById("selectedTotal");
+
+            const checkoutButton =
+                document.getElementById("checkoutButton");
+
+            const checkoutMessage =
+                document.getElementById("checkoutMessage");
+
+            if (!selectAll) {
+                return;
+            }
+
+            // Update the selected item count and total amount.
+            function updateSummary() {
+                let count = 0;
+                let total = 0;
+
+                itemCheckboxes.forEach(function (checkbox) {
+                    if (!checkbox.checked) {
+                        return;
+                    }
+
+                    const row = checkbox.closest(".cart-row");
+
+                    if (!row) {
+                        return;
+                    }
+
+                    const price = Number(row.dataset.price);
+                    const quantity = Number(row.dataset.quantity);
+
+                    if (!Number.isFinite(price) ||
+                        !Number.isFinite(quantity)) {
+                        return;
+                    }
+
+                    count += 1;
+                    total += price * quantity;
+                });
+
+                selectedCount.textContent = count;
+                selectedTotal.textContent = total.toFixed(2);
+
+                checkoutButton.disabled = count === 0;
+
+                selectAll.checked =
+                    itemCheckboxes.length > 0 &&
+                    Array.from(itemCheckboxes).every(
+                        checkbox => checkbox.checked
+                    );
+
+                selectAll.indeterminate =
+                    Array.from(itemCheckboxes).some(
+                        checkbox => checkbox.checked
+                    ) && !selectAll.checked;
+
+                if (count > 0) {
+                    checkoutMessage.classList.add("d-none");
+                }
+            }
+
+            // Select or deselect all attractions.
+            selectAll.addEventListener("change", function () {
+                itemCheckboxes.forEach(function (checkbox) {
+                    checkbox.checked = selectAll.checked;
+                });
+
+                updateSummary();
+            });
+
+            // Update the summary when an individual item changes.
+            itemCheckboxes.forEach(function (checkbox) {
+                checkbox.addEventListener("change", updateSummary);
+            });
+
+            // Call the RESTful payment API, then redirect to Stripe Checkout.
+            checkoutButton.addEventListener("click", async function () {
+                const selectedIds = Array.from(itemCheckboxes)
+                    .filter(checkbox => checkbox.checked)
+                    .map(checkbox => Number(checkbox.value));
+
+                if (selectedIds.length === 0) {
+                    checkoutMessage.textContent =
+                        "Please select at least one attraction.";
+                    checkoutMessage.classList.remove("d-none");
+                    return;
+                }
+
+                const token = document.querySelector(
+                    '#checkoutAntiforgeryToken input[name="__RequestVerificationToken"]'
+                );
+
+                if (!token) {
+                    checkoutMessage.textContent =
+                        "Security token missing. Please refresh the page.";
+                    checkoutMessage.classList.remove("d-none");
+                    return;
+                }
+
+                checkoutButton.disabled = true;
+                checkoutButton.textContent = "Redirecting to payment...";
+                checkoutMessage.classList.add("d-none");
+
+                try {
+                    const response = await fetch('@Url.Content("~/api/payments/checkout-session")', {
+                        method: 'POST',
+                        credentials: 'same-origin',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'RequestVerificationToken': token.value
+                        },
+                        body: JSON.stringify({
+                            selectedAttractionIds: selectedIds
+                        })
+                    });
+
+                    const result = await response.json().catch(() => null);
+
+                    if (!response.ok) {
+                        throw new Error(
+                            result?.message || result?.title ||
+                            "Unable to start payment. Please try again."
+                        );
+                    }
+
+                    if (!result?.checkoutUrl) {
+                        throw new Error("The payment provider did not return a checkout URL.");
+                    }
+
+                    window.location.assign(result.checkoutUrl);
+                } catch (error) {
+                    checkoutMessage.textContent =
+                        error.message || "Unable to start payment. Please try again.";
+                    checkoutMessage.classList.remove("d-none");
+                    checkoutButton.textContent = "Checkout Selected";
+                    checkoutButton.disabled = false;
+                }
+            });
+
+            // Initialise the summary.
+            updateSummary();
+        });
+    </script>
+}

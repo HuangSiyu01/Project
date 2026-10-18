@@ -1,0 +1,87 @@
+﻿@model Project.ViewModels.UserProfileViewModel
+
+@{
+    ViewData["Title"] = Model.DisplayName;
+}
+
+<div class="container mt-4">
+
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-body d-flex align-items-center">
+
+            @if (!string.IsNullOrEmpty(Model.AvatarUrl))
+            {
+                <img src="@Model.AvatarUrl" class="rounded-circle me-3" style="width:80px;height:80px;object-fit:cover;" />
+            }
+            else
+            {
+                <div class="rounded-circle bg-secondary me-3 d-flex align-items-center justify-content-center"
+                     style="width:80px;height:80px;">
+                    <i class="bi bi-person text-white fs-2"></i>
+                </div>
+            }
+
+            <div class="flex-grow-1">
+                <h3 class="mb-1">@Model.DisplayName</h3>
+                @if (!string.IsNullOrWhiteSpace(Model.Bio))
+                {
+                    <p class="text-muted mb-1">@Model.Bio</p>
+                }
+                <p class="text-muted small mb-0">
+                    <strong>Followers:</strong> @Model.FollowerCount &nbsp;|&nbsp;
+                    <strong>Following:</strong> @Model.FollowingCount
+                </p>
+            </div>
+
+            @if (!Model.IsCurrentUser)
+            {
+                <form asp-controller="Interaction" asp-action="ToggleFollow" method="post" class="d-inline">
+                    <input type="hidden" name="followeeId" value="@Model.UserId" />
+                    <input type="hidden" name="returnUrl" value="@Url.Action("UserProfile", "Profile", new { area = "Customer", id = Model.UserId })" />
+                    <button type="submit" class="btn @(Model.IsFollowing ? "btn-outline-secondary" : "btn-primary")">
+                        @(Model.IsFollowing ? "Unfollow" : "Follow")
+                    </button>
+                </form>
+            }
+        </div>
+    </div>
+
+    <hr class="mt-4" />
+
+    <h4>Posts</h4>
+
+    @if (!Model.Posts.Any())
+    {
+        <p class="text-muted">No posts yet.</p>
+    }
+    else
+    {
+        <div class="row g-3">
+            @foreach (var post in Model.Posts)
+            {
+                var firstImage = post.Images?.FirstOrDefault();
+                <div class="col-6 col-md-4 col-lg-3">
+                    <a asp-controller="Post" asp-action="Details" asp-route-id="@post.Id"
+                       class="text-decoration-none text-dark">
+                        <div class="card h-100 shadow-sm border-0">
+                            @if (firstImage != null)
+                            {
+                                <img src="@firstImage.ImageUrl" class="card-img-top" style="height:180px;object-fit:cover;" />
+                            }
+                            else
+                            {
+                                <div class="bg-light d-flex align-items-center justify-content-center" style="height:180px;">
+                                    <span class="text-muted">No image</span>
+                                </div>
+                            }
+                            <div class="card-body p-2">
+                                <h6 class="card-title mb-1">@post.Title</h6>
+                                <p class="text-muted small mb-0">@post.Location</p>
+                            </div>
+                        </div>
+                    </a>
+                </div>
+            }
+        </div>
+    }
+</div>

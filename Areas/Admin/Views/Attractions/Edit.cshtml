@@ -1,0 +1,207 @@
+﻿@model AttractionFormViewModel
+
+@{
+    ViewData["Title"] = "Edit Attraction";
+}
+
+<div class="container py-4" style="max-width:1050px;">
+    <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-4">
+        <div>
+            <h1 class="fw-bold mb-1">Edit Attraction</h1>
+            <p class="text-muted mb-0">Update the details, ticket price, photos, or publication status.</p>
+        </div>
+        <a asp-area="Admin" asp-controller="Attractions" asp-action="Index" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> Back to Attractions
+        </a>
+    </div>
+
+    <div class="card border-0 shadow-sm">
+        <div class="card-body p-4">
+            <form asp-area="Admin" asp-controller="Attractions" asp-action="Edit" asp-route-id="@Model.Id" method="post" enctype="multipart/form-data">
+                @Html.AntiForgeryToken()
+                <input asp-for="Id" type="hidden" />
+                <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+
+                <div class="mb-3">
+                    <label asp-for="Name" class="form-label fw-semibold"></label>
+                    <input asp-for="Name" class="form-control" maxlength="120" />
+                    <span asp-validation-for="Name" class="text-danger small"></span>
+                </div>
+
+                <div class="mb-3">
+                    <label asp-for="City" class="form-label fw-semibold"></label>
+                    <input asp-for="City" class="form-control" maxlength="100" />
+                    <span asp-validation-for="City" class="text-danger small"></span>
+                </div>
+
+                <div class="mb-3">
+                    <label asp-for="Description" class="form-label fw-semibold"></label>
+                    <textarea asp-for="Description" class="form-control" rows="5" maxlength="2000"></textarea>
+                    <span asp-validation-for="Description" class="text-danger small"></span>
+                </div>
+
+                <div class="mb-3">
+                    <label asp-for="TicketPrice" class="form-label fw-semibold"></label>
+                    <div class="input-group">
+                        <span class="input-group-text">NZ$</span>
+                        <input asp-for="TicketPrice" type="number" class="form-control" min="0.01" max="10000" step="0.01" />
+                    </div>
+                    <span asp-validation-for="TicketPrice" class="text-danger small"></span>
+                </div>
+
+                <div class="mb-4">
+                    <label class="form-label fw-semibold">Current Main Image</label>
+                    <div>
+                        <img src="@Url.Content(Model.CurrentMainImageUrl ?? string.Empty)" alt="@Model.Name" class="img-thumbnail" style="max-width:320px;max-height:220px;object-fit:cover;" />
+                    </div>
+                    <label for="MainImage" class="form-label mt-3">Replace Main Image (optional)</label>
+                    <input type="file" id="MainImage" name="MainImage" class="form-control" accept=".jpg,.jpeg,.png,.webp,.gif" />
+                    <div class="form-text">The current main image is kept unless you choose a replacement. Supported formats: JPG, JPEG, PNG, WEBP, GIF. Maximum 20 MB.</div>
+                    <span asp-validation-for="MainImage" class="text-danger small"></span>
+                </div>
+
+                <div class="mb-4">
+                    <label class="form-label fw-semibold">Existing Additional Photos</label>
+                    @if (Model.ExistingImages != null && Model.ExistingImages.Count > 0)
+                    {
+                        <div class="row g-3">
+                            @foreach (var image in Model.ExistingImages)
+                            {
+                                <div class="col-6 col-md-4 col-lg-3">
+                                    <div class="border rounded p-2 h-100">
+                                        <img src="@Url.Content(image.ImageUrl)" alt="@Model.Name" class="img-fluid rounded mb-2" style="width:100%;height:130px;object-fit:cover;" />
+                                        <div class="form-check">
+                                            @if (Model.RemoveImageIds?.Contains(image.Id) == true)
+                                            {
+                                                <input type="checkbox" class="form-check-input existing-image-removal" id="remove-image-@image.Id" name="RemoveImageIds" value="@image.Id" checked />
+                                            }
+                                            else
+                                            {
+                                                <input type="checkbox" class="form-check-input existing-image-removal" id="remove-image-@image.Id" name="RemoveImageIds" value="@image.Id" />
+                                            }
+                                            <label class="form-check-label small" for="remove-image-@image.Id">Remove this photo</label>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="text-muted mb-0">No additional photos uploaded.</p>
+                    }
+                </div>
+
+                <div class="mb-3">
+                    <label for="AdditionalImages" class="form-label fw-semibold">Add More Photos (optional)</label>
+                    <input type="file" id="AdditionalImages" name="AdditionalImages" class="form-control" accept=".jpg,.jpeg,.png,.webp,.gif" multiple />
+                    <div class="form-text">The gallery can contain up to 10 additional photos in total (excluding the main image). Each photo must be 20 MB or smaller. You can select photos together or add them in multiple selections.</div>
+                    <div id="additionalImagesCount" class="small text-muted mt-1" aria-live="polite">0 new photos selected</div>
+                    <div id="additionalImagesStatus" class="small mt-1" role="status" aria-live="polite"></div>
+                    <button type="button" id="clearAdditionalImages" class="btn btn-sm btn-outline-secondary mt-2">Clear newly selected photos</button>
+                    <span asp-validation-for="AdditionalImages" class="text-danger small"></span>
+                </div>
+
+                <div class="form-check form-switch mb-4">
+                    <input asp-for="IsAvailable" class="form-check-input" />
+                    <label asp-for="IsAvailable" class="form-check-label"></label>
+                    <div class="form-text">Only available attractions appear in public Attraction Tickets search.</div>
+                </div>
+
+                <div class="d-flex flex-wrap gap-2">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-save"></i> Save Changes
+                    </button>
+                    <a asp-area="Admin" asp-controller="Attractions" asp-action="Index" class="btn btn-outline-secondary">Cancel</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        (function () {
+            const input = document.getElementById('AdditionalImages');
+            const count = document.getElementById('additionalImagesCount');
+            const status = document.getElementById('additionalImagesStatus');
+            const clearButton = document.getElementById('clearAdditionalImages');
+            const removalCheckboxes = Array.from(document.querySelectorAll('.existing-image-removal'));
+            if (!input || !count || !status || !clearButton) return;
+
+            const maxGalleryImages = 10;
+            const maxBytes = 20 * 1024 * 1024;
+            let selectedFiles = [];
+
+            function sameFile(a, b) {
+                return a.name === b.name && a.size === b.size && a.lastModified === b.lastModified;
+            }
+
+            function remainingSlots() {
+                const existingKept = removalCheckboxes.filter(box => !box.checked).length;
+                return Math.max(0, maxGalleryImages - existingKept);
+            }
+
+            function updateInput() {
+                const transfer = new DataTransfer();
+                selectedFiles.forEach(file => transfer.items.add(file));
+                input.files = transfer.files;
+                count.textContent = `${selectedFiles.length} new photos selected; ${selectedFiles.length + (removalCheckboxes.filter(box => !box.checked).length)} / ${maxGalleryImages} gallery photos after saving`;
+            }
+
+            function trimToAvailableSlots() {
+                const slots = remainingSlots();
+                if (selectedFiles.length > slots) {
+                    selectedFiles = selectedFiles.slice(0, slots);
+                    status.className = 'small mt-1 text-warning';
+                    status.textContent = `Only ${slots} new photo(s) can be added because the gallery limit is 10. Extra selections were removed.`;
+                }
+                updateInput();
+            }
+
+            input.addEventListener('change', function () {
+                const newlyPicked = Array.from(input.files || []);
+                const messages = [];
+
+                for (const file of newlyPicked) {
+                    if (file.size > maxBytes) {
+                        messages.push(`${file.name} is larger than 20 MB and was skipped.`);
+                        continue;
+                    }
+                    if (selectedFiles.some(existing => sameFile(existing, file))) {
+                        continue;
+                    }
+                    if (selectedFiles.length >= remainingSlots()) {
+                        messages.push(`The gallery limit is 10 photos. Remove an existing photo or select fewer new photos.`);
+                        break;
+                    }
+                    selectedFiles.push(file);
+                }
+
+                updateInput();
+                if (messages.length) {
+                    status.className = 'small mt-1 text-danger';
+                    status.textContent = messages.join(' ');
+                } else {
+                    status.className = 'small mt-1 text-success';
+                    status.textContent = selectedFiles.length ? 'Photos are ready to upload.' : '';
+                }
+            });
+
+            removalCheckboxes.forEach(box => box.addEventListener('change', function () {
+                trimToAvailableSlots();
+            }));
+
+            clearButton.addEventListener('click', function () {
+                selectedFiles = [];
+                input.value = '';
+                updateInput();
+                status.className = 'small mt-1 text-muted';
+                status.textContent = 'Newly selected photos cleared.';
+            });
+
+            updateInput();
+        })();
+    </script>
+}

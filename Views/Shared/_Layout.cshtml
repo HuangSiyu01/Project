@@ -1,9 +1,23 @@
-﻿<!DOCTYPE html>
+﻿@inject Project.Services.CartService CartService
+
+@{
+    // Display the current customer's cart quantity in the navbar.
+    // Guests see 0; their cart data is not read from another user's session.
+    var cartCount = 0;
+
+    if (User.Identity?.IsAuthenticated == true && User.IsInRole("Customer"))
+    {
+        cartCount = await CartService.GetCartCountAsync();
+    }
+}
+
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>@ViewData["Title"] - Project</title>
+    <title>@ViewData["Title"] - TravelShare</title>
+
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
@@ -13,43 +27,161 @@
     <header>
         <nav class="navbar navbar-expand-sm navbar-light bg-white border-bottom box-shadow mb-3">
             <div class="container">
-                <a class="navbar-brand fw-bold text-primary" asp-controller="Post" asp-action="Index">
+
+                <!-- Website brand -->
+                <a class="navbar-brand fw-bold text-primary"
+                   asp-area=""
+                   asp-controller="Home"
+                   asp-action="Index">
                     <i class="bi bi-airplane-engines"></i> TravelShare
                 </a>
-                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse"
-                        aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+
+                <button class="navbar-toggler"
+                        type="button"
+                        data-bs-toggle="collapse"
+                        data-bs-target="#mainNavbar"
+                        aria-controls="mainNavbar"
+                        aria-expanded="false"
+                        aria-label="Toggle navigation">
                     <span class="navbar-toggler-icon"></span>
                 </button>
-                <div class="navbar-collapse collapse d-sm-inline-flex justify-content-between">
-                    <ul class="navbar-nav flex-grow-1">
-                        @if (User.Identity != null && User.Identity.IsAuthenticated)
+
+                <div class="navbar-collapse collapse" id="mainNavbar">
+                    <ul class="navbar-nav me-auto">
+
+                        <!-- Home -->
+                        <li class="nav-item">
+                            <a class="nav-link text-dark"
+                               asp-area=""
+                               asp-controller="Home"
+                               asp-action="Index">
+                                <i class="bi bi-house-door"></i> Home
+                            </a>
+                        </li>
+
+                        <!-- Customer navigation -->
+                        @if (User.Identity?.IsAuthenticated == true &&
+                                                User.IsInRole("Customer"))
                         {
+                            <!-- Customer profile -->
                             <li class="nav-item">
-                                <a class="nav-link text-dark" asp-controller="Post" asp-action="Index">
-                                    <i class="bi bi-house-door"></i> Home
-                                </a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link text-dark" asp-controller="Profile" asp-action="Index">
+                                <a class="nav-link text-dark"
+                                   asp-area="Customer"
+                                   asp-controller="Profile"
+                                   asp-action="Index">
                                     <i class="bi bi-person-circle"></i> My Profile
                                 </a>
                             </li>
+
+                            <!-- Customer orders -->
+                            <li class="nav-item">
+                                <a class="nav-link text-dark"
+                                   asp-area="Customer"
+                                   asp-controller="Orders"
+                                   asp-action="Index">
+                                    <i class="bi bi-receipt"></i> My Orders
+                                </a>
+                            </li>
+
+                            <!-- Customer e-tickets -->
+                            <li class="nav-item">
+                                <a class="nav-link text-dark"
+                                   asp-area="Customer"
+                                   asp-controller="Tickets"
+                                   asp-action="Index">
+                                    <i class="bi bi-ticket-perforated"></i> My E-Tickets
+                                </a>
+                            </li>
                         }
+
+                        <!-- Shopping cart: visitors and customers only -->
+                        @if (User.Identity?.IsAuthenticated != true ||
+                                                User.IsInRole("Customer"))
+                        {
+                            <li class="nav-item">
+                                <a class="nav-link text-dark d-flex align-items-center"
+                                   asp-area="Customer"
+                                   asp-controller="Cart"
+                                   asp-action="Index"
+                                   aria-label="Shopping Cart, @cartCount items">
+                                    <i class="bi bi-cart3"></i>
+                                    <span class="ms-1">Shopping Cart</span>
+                                    <span class="badge rounded-pill bg-primary ms-2">@cartCount</span>
+                                </a>
+                            </li>
+                        }
+
+                        <!-- Admin management links -->
+                        @if (User.Identity?.IsAuthenticated == true &&
+                                                User.IsInRole("Admin"))
+                        {
+                            <li class="nav-item">
+                                <a class="nav-link text-dark"
+                                   asp-area="Admin"
+                                   asp-controller="Attractions"
+                                   asp-action="Index">
+                                    <i class="bi bi-geo-alt"></i>
+                                    Attraction Management
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link text-dark"
+                                   asp-area="Admin"
+                                   asp-controller="Order"
+                                   asp-action="Index">
+                                    <i class="bi bi-clipboard-check"></i>
+                                    Order Management
+                                </a>
+                            </li>
+                        }
+
                     </ul>
+
+                    <!-- User account navigation -->
                     <ul class="navbar-nav">
-                        @if (User.Identity != null && User.Identity.IsAuthenticated)
+                        @if (User.Identity?.IsAuthenticated == true)
                         {
                             <li class="nav-item">
                                 <span class="nav-link text-dark">
-                                    <i class="bi bi-person"></i> @User.Identity.Name
+                                    <i class="bi bi-person"></i>
+                                    @User.Identity.Name
                                 </span>
                             </li>
+
                             <li class="nav-item">
-                                <form asp-controller="Account" asp-action="Logout" method="post" class="d-inline">
-                                    <button type="submit" class="btn btn-link nav-link text-dark">
-                                        <i class="bi bi-box-arrow-right"></i> Logout
+                                <form asp-area="Customer"
+                                      asp-controller="Account"
+                                      asp-action="Logout"
+                                      method="post"
+                                      class="d-inline">
+                                    @Html.AntiForgeryToken()
+
+                                    <button type="submit"
+                                            class="btn btn-link nav-link text-dark">
+                                        <i class="bi bi-box-arrow-right"></i>
+                                        Logout
                                     </button>
                                 </form>
+                            </li>
+                        }
+                        else
+                        {
+                            <li class="nav-item">
+                                <a class="nav-link text-dark"
+                                   asp-area="Customer"
+                                   asp-controller="Account"
+                                   asp-action="Login">
+                                    Login
+                                </a>
+                            </li>
+
+                            <li class="nav-item">
+                                <a class="nav-link text-dark"
+                                   asp-area="Customer"
+                                   asp-controller="Account"
+                                   asp-action="Register">
+                                    Register
+                                </a>
                             </li>
                         }
                     </ul>
@@ -57,21 +189,26 @@
             </div>
         </nav>
     </header>
+
+    <!-- Page content -->
     <div class="container">
         <main role="main" class="pb-3">
             @RenderBody()
         </main>
     </div>
 
+    <!-- Footer -->
     <footer class="border-top footer text-muted mt-5">
         <div class="container text-center py-3">
             &copy; 2026 - TravelShare
         </div>
     </footer>
 
+    <!-- Scripts -->
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
     <script src="~/js/site.js" asp-append-version="true"></script>
+
     @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>

@@ -1,0 +1,262 @@
+﻿@model List<Post>
+
+@{
+    ViewData["Title"] = "Home";
+
+    var keyword = ViewBag.Keyword as string;
+    var hasKeyword = !string.IsNullOrWhiteSpace(keyword);
+    var searchType = ViewBag.SearchType as string ?? "posts";
+
+    var attractions =
+        ViewBag.Attractions as List<Project.Models.Attraction>
+        ?? new List<Project.Models.Attraction>();
+
+    var showingAttractions = searchType == "attractions";
+}
+
+<div class="container mt-4">
+
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            <i class="bi bi-check-circle-fill"></i>
+            @TempData["SuccessMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
+
+    @if (TempData["ErrorMessage"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <i class="bi bi-exclamation-triangle-fill"></i>
+            @TempData["ErrorMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="fw-bold mb-0">
+            <i class="bi bi-compass text-primary"></i> Travel Stories
+        </h2>
+    </div>
+
+    <form method="get"
+          asp-controller="Post"
+          asp-action="Index"
+          class="mb-3">
+
+        <input type="hidden"
+               name="searchType"
+               value="@searchType" />
+
+        <div class="input-group input-group-lg shadow-sm">
+            <span class="input-group-text bg-white border-end-0">
+                <i class="bi bi-search"></i>
+            </span>
+
+            <input type="text"
+                   name="keyword"
+                   value="@keyword"
+                   class="form-control border-start-0"
+                   placeholder="Search by location..."
+                   aria-label="Search by location" />
+
+            <button type="submit" class="btn btn-primary px-4">
+                <i class="bi bi-search"></i> Search
+            </button>
+        </div>
+    </form>
+
+    @if (hasKeyword)
+    {
+        <div class="mb-4">
+            <p class="text-muted mb-2">
+                Choose what you want to explore:
+            </p>
+
+            <div class="d-flex flex-wrap gap-2">
+                <a asp-controller="Post"
+                   asp-action="Index"
+                   asp-route-keyword="@keyword"
+                   asp-route-searchType="posts"
+                   class="btn @(showingAttractions ? "btn-outline-primary" : "btn-primary")">
+                    <i class="bi bi-chat-square-text"></i> User Posts
+                </a>
+
+                <a asp-controller="Post"
+                   asp-action="Index"
+                   asp-route-keyword="@keyword"
+                   asp-route-searchType="attractions"
+                   class="btn @(showingAttractions ? "btn-primary" : "btn-outline-primary")">
+                    <i class="bi bi-ticket-perforated"></i> Attraction Tickets
+                </a>
+            </div>
+        </div>
+    }
+
+    @if (!hasKeyword)
+    {
+        <div class="alert alert-light border text-center py-5">
+            <i class="bi bi-geo-alt fs-1 text-muted d-block mb-2"></i>
+            <p class="text-muted mb-0">
+                Type a location above to start exploring.
+            </p>
+        </div>
+    }
+    else if (showingAttractions)
+    {
+        @if (attractions.Count == 0)
+        {
+            <div class="alert alert-info text-center py-4">
+                <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                <p class="mb-0">
+                    No attractions found for "<strong>@keyword</strong>".
+                </p>
+            </div>
+        }
+        else
+        {
+            <p class="text-muted mb-3">
+                <i class="bi bi-funnel"></i>
+                Attractions for "<strong>@keyword</strong>":
+                <span class="ms-1">(@attractions.Count results)</span>
+            </p>
+
+            <div class="row">
+                @foreach (var attraction in attractions)
+                {
+                    <div class="col-12 col-md-6 col-lg-4 mb-4">
+                        <div class="card h-100 shadow-sm">
+
+                            @if (!string.IsNullOrWhiteSpace(attraction.ImageUrl))
+                            {
+                                <img src="@Url.Content(attraction.ImageUrl)"
+                                     class="card-img-top"
+                                     alt="@attraction.Name"
+                                     style="height:220px; object-fit:cover;"
+                                     onerror="this.onerror=null; this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+
+                                <div class="bg-light align-items-center justify-content-center"
+                                     style="height:220px; display:none;">
+                                    <div class="text-center text-muted">
+                                        <i class="bi bi-image fs-1"></i>
+                                        <p class="mb-0">Image unavailable</p>
+                                    </div>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="bg-light d-flex align-items-center justify-content-center"
+                                     style="height:220px;">
+                                    <div class="text-center text-muted">
+                                        <i class="bi bi-image fs-1"></i>
+                                        <p class="mb-0">No image available</p>
+                                    </div>
+                                </div>
+                            }
+
+                            <div class="card-body d-flex flex-column">
+                                <h5 class="card-title">
+                                    @attraction.Name
+                                </h5>
+
+                                <p class="text-muted">
+                                    <i class="bi bi-geo-alt"></i>
+                                    @attraction.City
+                                </p>
+
+                                <p class="card-text">
+                                    @attraction.Description
+                                </p>
+
+                                <p class="fw-bold">
+                                    Ticket Price:
+                                    NZ$ @attraction.TicketPrice.ToString("N2", System.Globalization.CultureInfo.InvariantCulture)
+                                </p>
+
+                                <a asp-controller="Attractions"
+                                   asp-action="Details"
+                                   asp-route-id="@attraction.Id"
+                                   asp-route-keyword="@keyword"
+                                   class="btn btn-primary mt-auto">
+                                    <i class="bi bi-ticket-perforated"></i>
+                                    View Details
+                                </a>
+                            </div>
+
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    }
+    else if (Model == null || Model.Count == 0)
+    {
+        <div class="alert alert-info text-center py-4">
+            <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+
+            <p class="mb-0">
+                No user posts found for
+                "<strong>@keyword</strong>".
+            </p>
+
+            <p class="small text-muted mb-0 mt-2">
+                Select Attraction Tickets above to explore available attractions.
+            </p>
+        </div>
+    }
+    else
+    {
+        <p class="text-muted mb-3">
+            <i class="bi bi-funnel"></i>
+            User posts for "<strong>@keyword</strong>":
+            <span class="ms-1">(@Model.Count results)</span>
+        </p>
+
+        <div class="row g-4">
+            @foreach (var post in Model)
+            {
+                var firstImage = post.Images?.FirstOrDefault();
+
+                <div class="col-6 col-md-4 col-lg-3">
+                    <a asp-controller="Post"
+                       asp-action="Details"
+                       asp-route-id="@post.Id"
+                       class="text-decoration-none text-dark">
+
+                        <div class="card h-100 shadow-sm border-0 rounded-3 overflow-hidden">
+
+                            @if (firstImage != null)
+                            {
+                                <img src="@firstImage.ImageUrl"
+                                     alt="@post.Title"
+                                     class="card-img-top"
+                                     style="height:180px; object-fit:cover;" />
+                            }
+                            else
+                            {
+                                <div class="bg-light d-flex align-items-center justify-content-center"
+                                     style="height:180px;">
+                                    <i class="bi bi-image text-muted fs-1"></i>
+                                </div>
+                            }
+
+                            <div class="card-body">
+                                <h6 class="card-title fw-semibold mb-2">
+                                    @post.Title
+                                </h6>
+
+                                <p class="text-muted small mb-0">
+                                    <i class="bi bi-geo-alt-fill text-danger"></i>
+                                    @post.Location
+                                </p>
+                            </div>
+
+                        </div>
+                    </a>
+                </div>
+            }
+        </div>
+    }
+
+</div>

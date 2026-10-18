@@ -1,0 +1,22 @@
+﻿@{
+    ViewData["Title"] = "Payment Successful";
+}
+
+<div class="container py-5 text-center">
+    <h1 class="text-success">Payment Successful!</h1>
+
+    <p class="mt-3">
+        Your payment has been completed successfully.
+    </p>
+
+    <p>
+        Thank you for using TravelShare.
+    </p>
+
+    <a asp-area="Customer"
+       asp-controller="Home"
+       asp-action="Index"
+       class="btn btn-primary mt-3">
+        Back to Homepage
+    </a>
+</div>
